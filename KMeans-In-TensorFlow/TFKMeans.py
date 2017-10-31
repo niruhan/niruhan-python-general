@@ -10,6 +10,8 @@ num_steps = 100
 
 vector_values = []
 
+sess = tf.InteractiveSession()
+
 savePath = "./TFModel/"
 # Create saved model builder for persisting the model
 builder = tf.saved_model.builder.SavedModelBuilder(savePath)
@@ -42,7 +44,7 @@ print(expanded_centroids)
 
 distances = tf.reduce_sum(tf.square(tf.subtract(expanded_vectors, expanded_centroids)), 2)
 print(distances)
-assignments = tf.arg_min(distances, 0)
+assignments = tf.argmin(distances, 0)
 print(assignments)
 
 means = tf.concat([
@@ -58,19 +60,37 @@ means = tf.concat([
 update_centroids = tf.assign(centroids, means)
 init_op = tf.global_variables_initializer()
 
-with tf.Session() as sess:
-    sess.run(init_op)
-    for step in range(num_steps):
-        _, centroid_values, assignment_values = sess.run([update_centroids,
-                                                          centroids,
-                                                          assignments])
-    print("centroids")
-    print(centroid_values)
-    # Save your model
-    # savePath = modelSaver.save(sess, "TFModel/myModel.ckpt")
-    # print("model saved in : ", savePath)
-    builder.add_meta_graph_and_variables(sess, [tf.saved_model.tag_constants.SERVING])
-    builder.save(True)
+sess.run(init_op)
+for step in range(num_steps):
+    _, centroid_values, assignment_values = sess.run([update_centroids,
+                                                      centroids,
+                                                      assignments])
+print("centroids")
+print(centroid_values)
+print("Assignments")
+print(assignment_values)
+
+# Prediction part
+inputDataPoint = tf.placeholder(tf.float32, shape=[2], name='input')
+prediction = tf.gather(centroids,
+                       tf.argmin(
+                           tf.reduce_sum(
+                                tf.square(
+                                    tf.subtract(centroids, inputDataPoint)
+                                )
+                            , 1)
+                       ))
+output = tf.identity(prediction, name='output')
+
+print(sess.run(output, feed_dict={inputDataPoint: [1.0, 2.0]}))
+
+# Save your model
+# savePath = modelSaver.save(sess, "TFModel/myModel.ckpt")
+# print("model saved in : ", savePath)
+builder.add_meta_graph_and_variables(sess, [tf.saved_model.tag_constants.SERVING])
+builder.save(True)
+writer = tf.summary.FileWriter("./logs/", sess.graph_def)
+writer.flush()
 
 data = {"x": [], "y": [], "cluster": []}
 for i in range(len(assignment_values)):
